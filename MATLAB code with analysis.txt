@@ -1,0 +1,175 @@
+clear;
+clc;
+close all;
+%-----------Olo to arxeio
+Alerg_TrainingData=xlsread('DATA1',1);
+Alerg_ValidationData=xlsread('DATA1',3);
+%-----Dependant variable
+Alerg_T=Alerg_TrainingData(:,1);
+Alerg_Tb=Alerg_T';
+Alerg_V=Alerg_ValidationData(:,1);
+Alerg_Vb=Alerg_V';
+%-----Independant variable
+in_T=xlsread('DATA1',2);
+in_Tb=in_T';
+in_V=xlsread('DATA1',4); 
+in_Vb=in_V';
+
+
+
+mdl_T=GeneralizedLinearModel.fit(in_T,Alerg_T,’Distribution’,’binomial’,’link’,’logit’);
+[b,dev,stats] = glmfit(in_T,Alerg_T,’binomial’,’link’,’logit’);
+Coef=double(mdl_T.Coefficients(:,1));
+
+
+
+for i=1:126
+A(i)=Coef(1)+Coef(2)*in_T(i,1)+Coef(3)*in_T(i,2)+Coef(4)*in_T(i,3)+Coef(5)*in_T(i,4)+Coef(6)*in_T(i,5)+Coef(7)*in_T(i,6)+...
+Coef(8)*in_T(i,7)+Coef(9)*in_T(i,8)+Coef(10)*in_T(i,9)+Coef(11)*in_T(i,10)+Coef(12)*in_T(i,11)+Coef(13)*in_T(i,12)+Coef(14)*in_T(i,13);
+p(i)=exp(A(i))/(1+exp(A(i)));
+end
+p_vert=p’;
+
+
+% y are the dependent variable observations
+% p are the estimations of the model
+Alerg_T_R=floor(Alerg_T);
+% Binomial cumulative distribution function
+ww1=binocdf(Alerg_T_R,1,p_vert(:,1));
+ww2=binocdf(Alerg_T_R-1,1,p_vert(:,1));
+% Uniform random
+u=unifrnd(ww2,ww1);
+% the inverse of the normal cdf
+Res=(norminv(u));
+
+%----------------------------Bootstrapping---------------
+
+[bootstat,bootsam] = bootstrap(2000,@corr,Res);
+
+%-------matrix of bootstrapped residuals---------
+ResN=Res(bootsam);
+
+
+%--------New dependent variable ----
+for i=1:126
+ for j=1:2000
+ 
+ Alerg_T_new(i,j)=p(i)+ResN(i,j);
+ 
+ if Alerg_T_new(i,j)<=0
+            Alerg_T_new(i,j) = 0;
+        elseif Alerg_T_new(i,j) >= 1
+            Alerg_T_new(i,j)=1;
+        else
+            Alerg_T_new(i,j)=round(Alerg_T_new(i,j));
+ end
+ 
+ end
+end
+
+%------------New coefficients-------
+ 
+for j=1:2000
+ Coeff_N(:,j)= glmfit(in_T,Alerg_T_new(:,j),’binomial’);
+end 
+
+%---------------New probabilities------
+ 
+ for j=1:c
+ for i=1:126
+  A_New(i,j)=Coeff_N(1,j)+Coeff_N(2,j)*in_T(i,1)+Coeff_N(3,j)*in_T(i,2)+Coeff_N(4,j)*in_T(i,3)+Coeff_N(5,j)*in_T(i,4)+Coeff_N(6,j)*in_T(i,5)+...
+  Coeff_N(7,j)*in_T(i,6)+Coeff_N(8,j)*in_T(i,7)+Coeff_N(9,j)*in_T(i,8)+Coeff_N(10,j)*in_T(i,9)+Coef(11)*in_T(i,10)+Coef(12)*in_T(i,11)+Coef(13)*in_T(i,12)+Coef(14)*in_T(i,13);
+  p_New(i,j)=exp(A_New(i,j))/(1+exp(A_New(i,j)));
+ end
+ end
+
+
+% y are the dependent variable observations
+% p are the estimations of the model
+Alerg_T_R2=floor(Alerg_T_new);
+ 
+for j=1:c 
+% Binomial cumulative distribution function
+ww1_2(:,j)=binocdf(Alerg_T_R2(:,j),1,p_New(:,j));
+ww2_2(:,j)=binocdf(Alerg_T_R2(:,j)-1,1,p_New(:,j));
+% Uniform random
+u_2(:,j)=unifrnd(ww2_2(:,j),ww1_2(:,j));
+% the inverse of the normal cdf
+Res_2(:,j)=(norminv(u_2(:,j)));
+end
+
+
+%---------Q-Q PLOT-------------
+  
+  
+   %------Confidence bounds------
+  
+  h1=qqplot(res_test_2.Res_2_Final(:,19));
+  set(h1(1),’line’,’-’,’markersize’,1,’markeredgecolor’,[0 0 0]);
+  delete(h1(3));
+  hold on;
+  h2=qqplot(res_test_2.Res_2_Final(:,759));
+  set(h2(1),’line’,’-’,’markersize’,1,’markeredgecolor’,[0 0 0]);
+  delete(h2(3));
+  
+  %-------Plot of the initial Residuals------
+  qqplot(Res);
+
+
+
+
+
+%-----------Statistic for the calculation of p-values------
+ 
+ for i=2:14   
+ T(i-1)=Coef(i)/stats.se(i);      
+ end
+ 
+  %--------------calculation of p-values----------
+
+for i=1:13
+[h,pv,ci,zval]=ztest(T(i),0,1);
+p_values_3(i,1)=pv;
+End
+
+
+%-------------PPV, NPV, Accuracy calculation
+ 
+  %-----------Validity examination ------------
+ 
+  
+for i=1:21
+A_V(i)=Coef(1)+Coef(2)*in_V(i,1)+Coef(3)*in_V(i,2)+Coef(4)*in_V(i,3)+Coef(5)*in_V(i,4)+Coef(6)*in_V(i,5)+Coef(7)*in_V(i,6)+...
+Coef(8)*in_V(i,7)+Coef(9)*in_V(i,8)+Coef(10)*in_V(i,9)+Coef(11)*in_T(i,10)+Coef(12)*in_T(i,11)+Coef(13)*in_T(i,12)+Coef(14)*in_T(i,13);
+p_V(i)=exp(A_V(i))/(1+exp(A_V(i)));
+end
+ 
+ 
+round_predicted_V=round(p_V);
+ 
+TP_V=0;
+TN_V=0;
+FP_V=0;
+FN_V=0;
+ 
+for i=1:length(Alerg_V)
+if Alerg_V(i)==1 && round_predicted_V(i)==1;
+    TP_V=TP_V+1;
+elseif Alerg_V(i)==1 && round_predicted_V(i)==0;
+    FN_V=FN_V+1;
+elseif Alerg_V(i)==0 && round_predicted_V(i)==1;
+    FP_V=FP_V+1;
+elseif Alerg_V(i)==0 && round_predicted_V(i)==0;
+    TN_V=TN_V+1;
+end
+end
+ 
+ 
+Positive_Predicted_Value_V=(TP_V/(TP_V+FP_V))*100;
+Negative_Predicted_Value_V=(TN_V/(TN_V+FN_V))*100;
+Accuracy_V=((TP_V+TN_V)/(TP_V+TN_V+FP_V+FN_V))*100;
+
+
+
+
+
